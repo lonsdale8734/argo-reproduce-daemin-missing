@@ -1,0 +1,55 @@
+# ./argo submit -n argo --serviceaccount argo daemon-miss.yaml
+# ./argo submit -n argo-pipeline daemon-miss.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: daemon-missing-before-
+spec:
+  activeDeadlineSeconds: 150
+  entrypoint: dag
+  onExit: exit
+  templates:
+  - name: dag
+    dag:
+      tasks:
+      - name: daemon
+        template: daemon
+      - name: sleep
+        template: sleep
+        dependencies: [daemon]
+
+  - name: daemon
+    daemon: true
+    script:
+      image: bitnami/kubectl:1.15
+      command: [sh]
+      source: |
+        set -e
+        echo "{{pod.name}}"
+        kubectl -n "{{workflow.namespace}}" delete po "{{pod.name}}"
+        sleep 30
+      readinessProbe:
+        exec:
+          command:
+          - sleep
+          - 10s
+        initialDelaySeconds: 15
+        timeoutSeconds: 2
+
+  - name: sleep
+    script:
+      image: bitnami/kubectl:1.15
+      command: [sh]
+      source: |
+        set -e
+        echo "sleep"
+        sleep 10s
+
+  - name: exit
+    script:
+      image: bitnami/kubectl:1.15
+      command: [sh]
+      source: |
+        set -e
+        echo "exit"
+        sleep 10s
